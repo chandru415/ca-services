@@ -1,0 +1,45 @@
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  batch:
+    timeout: 5s
+    send_batch_size: 1000
+  
+  # Proper resource processor configuration
+  resource:
+    attributes:
+      - key: environment
+        value: production
+        action: upsert
+      - key: service.version
+        value: "1.0.0"
+        action: upsert
+
+exporters:
+  prometheusremotewrite:
+    endpoint: "http://prometheus:9090/api/v1/write"
+    timeout: 30s
+
+  logging:
+    verbosity: detailed
+  otlp:
+    endpoint: "jaeger:4317"
+    tls:
+      insecure: true
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [batch, resource]  # Include resource processor here
+      exporters: [otlp, logging]
+    metrics:
+      receivers: [otlp]
+      processors: [batch, resource]
+      exporters: [logging]

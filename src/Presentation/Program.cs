@@ -1,10 +1,13 @@
+using Microsoft.AspNetCore.HttpOverrides;
+using Presentation.Endpoints;
+using Presentation.Installers.Extensions;
 using Scalar.AspNetCore;
+using System.Security.Claims;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container.
-// Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
-builder.Services.AddOpenApi();
+builder.Services.InstallServicesInAssembly(builder.Configuration);
+builder.BuilderExtensionsInAssembly(builder.Configuration);
 
 var app = builder.Build();
 
@@ -16,3 +19,24 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+
+app.UseAuthentication();
+app.UseAuthorization();
+
+app.UseCors();
+
+app.UseForwardedHeaders(new ForwardedHeadersOptions
+{
+    ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto
+});
+
+app.MapGroupEndpoints();
+
+
+
+app.Run();
+
+
+
+
+

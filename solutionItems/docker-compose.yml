@@ -1,0 +1,131 @@
+networks:
+  monitoring:
+    driver: bridge
+  messaging:
+    driver: bridge
+
+volumes:
+  prometheus_data: {}
+  grafana_data: {}
+  keycloak_data: {}
+  redis_data: {}
+
+services:
+
+  # Keycloak (Identity Provider)
+  keycloak:
+    image: quay.io/keycloak/keycloak:24.0
+    container_name: keycloak
+    command: start-dev
+    environment:
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://keycloak-db:5432/keycloak
+      KC_DB_USERNAME: keycloak
+      KC_DB_PASSWORD: keycloak
+    volumes:
+      - keycloak_data:/opt/keycloak/data
+    ports:
+      - "8080:8080"
+    networks:
+      - monitoring
+    depends_on:
+      - keycloak-db
+
+  keycloak-db:
+    image: postgres:15
+    container_name: keycloak-db
+    environment:
+      POSTGRES_DB: keycloak
+      POSTGRES_USER: keycloak
+      POSTGRES_PASSWORD: keycloak
+    volumes:
+      - keycloak_data:/var/lib/postgresql/data
+    networks:
+      - monitoring
+
+  # Redis
+  # redis:
+  #   image: redis:7
+  #   container_name: redis
+  #   command: redis-server --save 60 1 --loglevel warning
+  #   volumes:
+  #     - redis_data:/data
+  #   ports:
+  #     - "6379:6379"
+  #   networks:
+  #     - messaging
+  #     - monitoring
+
+  # # NATS with JetStream
+  # nats:
+  #   image: nats:2.9
+  #   container_name: nats
+  #   command: "-js -m 8222"
+  #   ports:
+  #     - "4222:4222"
+  #     - "8222:8222"
+  #   volumes:
+  #     - ./nats-config.conf:/etc/nats/nats-server.conf
+  #   networks:
+  #     - messaging
+  #     - monitoring
+
+  # OpenTelemetry Collector
+  otel-collector:
+    image: otel/opentelemetry-collector:0.88.0
+    container_name: otel-collector
+    command: ["--config=/etc/otel-collector-config.yaml"]
+    volumes:
+      - ./otel-collector-config.yaml:/etc/otel-collector-config.yaml
+    ports:
+      - "4317:4317"
+      - "4318:4318"
+      - "8889:8888" # for Prometheus to scrape
+    networks:
+      - monitoring
+    depends_on:
+      - jaeger
+      - prometheus
+
+  # Jaeger
+  jaeger:
+    image: jaegertracing/all-in-one:1.48
+    container_name: jaeger
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
+    ports:
+      - "16686:16686"    # UI
+      - "6831:6831/udp"  # Agent
+      - "6832:6832/udp"
+      - "14250:14250"    # OTLP gRPC for collector
+    networks:
+      - monitoring
+
+  # Prometheus
+  prometheus:
+    image: prom/prometheus:v2.47.0
+    container_name: prometheus
+    volumes:
+      - prometheus_data:/prometheus
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+    ports:
+      - "9090:9090"
+    networks:
+      - monitoring
+
+  # Grafana
+  # grafana:
+  #   image: grafana/grafana:10.2.0
+  #   container_name: grafana
+  #   volumes:
+  #     - grafana_data:/var/lib/grafana
+  #     - ./grafana-provisioning:/etc/grafana/provisioning
+  #   environment:
+  #     GF_SECURITY_ADMIN_USER: admin
+  #     GF_SECURITY_ADMIN_PASSWORD: admin
+  #   ports:
+  #     - "3000:3000"
+  #   networks:
+  #     - monitoring
