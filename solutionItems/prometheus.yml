@@ -1,24 +1,8 @@
 global:
-  scrape_interval: 15s
+  scrape_interval:     15s
   evaluation_interval: 15s
-  scrape_timeout: 10s
-
-rule_files:
-  - '/etc/prometheus/alert.rules.yml'
 
 scrape_configs:
-  - job_name: 'otel-collector'
-    scrape_interval: 10s
+  - job_name: 'otel'
     static_configs:
-      - targets: ['otel-collector:8888']
-
-  - job_name: 'nats'
-    scrape_interval: 15s
-    metrics_path: '/metrics'
-    static_configs:
-      - targets: ['nats:8222']
-
-  - job_name: 'redis'
-    scrape_interval: 15s
-    static_configs:
-      - targets: ['redis:9121']
+      - targets: [ 'otel-collector:9201' ]
