@@ -11,10 +11,9 @@ volumes:
   redis_data: {}
 
 services:
-
   # Keycloak (Identity Provider)
   keycloak:
-    image: quay.io/keycloak/keycloak:24.0
+    image: quay.io/keycloak/keycloak
     container_name: keycloak
     command: start-dev
     environment:
@@ -24,6 +23,7 @@ services:
       KC_DB_URL: jdbc:postgresql://keycloak-db:5432/keycloak
       KC_DB_USERNAME: keycloak
       KC_DB_PASSWORD: keycloak
+      KC_METRICS_ENABLED: true
     volumes:
       - keycloak_data:/opt/keycloak/data
     ports:
@@ -34,7 +34,7 @@ services:
       - keycloak-db
 
   keycloak-db:
-    image: postgres:15
+    image: postgres
     container_name: keycloak-db
     environment:
       POSTGRES_DB: keycloak
@@ -47,7 +47,7 @@ services:
 
   # Redis
   # redis:
-  #   image: redis:7
+  #   image: redis
   #   container_name: redis
   #   command: redis-server --save 60 1 --loglevel warning
   #   volumes:
@@ -60,7 +60,7 @@ services:
 
   # # NATS with JetStream
   # nats:
-  #   image: nats:2.9
+  #   image: nats
   #   container_name: nats
   #   command: "-js -m 8222"
   #   ports:
@@ -74,15 +74,18 @@ services:
 
   # OpenTelemetry Collector
   otel-collector:
-    image: otel/opentelemetry-collector:0.88.0
+    image: otel/opentelemetry-collector
     container_name: otel-collector
-    command: ["--config=/etc/otel-collector-config.yaml"]
+    command:
+      [
+        "--config=/etc/otel-collector-config.yaml"
+      ]
     volumes:
       - ./otel-collector-config.yaml:/etc/otel-collector-config.yaml
     ports:
       - "4317:4317"
       - "4318:4318"
-      - "8889:8888" # for Prometheus to scrape
+      - "8888:8888" # for Prometheus to scrape
     networks:
       - monitoring
     depends_on:
@@ -91,21 +94,21 @@ services:
 
   # Jaeger
   jaeger:
-    image: jaegertracing/all-in-one:1.48
+    image: jaegertracing/all-in-one
     container_name: jaeger
     environment:
       COLLECTOR_OTLP_ENABLED: "true"
     ports:
-      - "16686:16686"    # UI
-      - "6831:6831/udp"  # Agent
+      - "16686:16686" # UI
+      - "6831:6831/udp" # Agent
       - "6832:6832/udp"
-      - "14250:14250"    # OTLP gRPC for collector
+      - "14250:14250" # OTLP gRPC for collector
     networks:
       - monitoring
 
   # Prometheus
   prometheus:
-    image: prom/prometheus:v2.47.0
+    image: prom/prometheus
     container_name: prometheus
     volumes:
       - prometheus_data:/prometheus
@@ -117,7 +120,7 @@ services:
 
   # Grafana
   # grafana:
-  #   image: grafana/grafana:10.2.0
+  #   image: grafana/grafana
   #   container_name: grafana
   #   volumes:
   #     - grafana_data:/var/lib/grafana

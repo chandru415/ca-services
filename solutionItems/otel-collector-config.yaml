@@ -1,45 +1,91 @@
 receivers:
+  # Receives data in OTLP format (traces, metrics, logs)
   otlp:
     protocols:
+      # Standard gRPC endpoint for OTLP
       grpc:
         endpoint: 0.0.0.0:4317
+      # Standard HTTP endpoint for OTLP
       http:
         endpoint: 0.0.0.0:4318
 
+  # Gathers host-level metrics (CPU, memory, disk, etc.)
+  hostmetrics:
+    collection_interval: 10s
+    scrapers:
+      cpu:
+      memory:
+      disk:
+      network:
+      load:
+      filesystem:
+      # process: # You might want to add process metrics too
+
 processors:
+  # Batches data to improve export efficiency
   batch:
     timeout: 5s
     send_batch_size: 1000
-  
-  # Proper resource processor configuration
+
+  # Adds or modifies resource attributes (service name, environment, etc.)
   resource:
     attributes:
       - key: environment
-        value: production
+        value: production # <-- **CUSTOMIZE THIS** (e.g., development, staging, production)
         action: upsert
       - key: service.version
-        value: "1.0.0"
+        value: "1.0.0" # <-- **CUSTOMIZE THIS** (your application version)
         action: upsert
+      # Consider adding service.name here as well if not set by the SDK
+      # - key: service.name
+      #   value: "YourService.Api" # <-- **CUSTOMIZE THIS**
+      #   action: upsert
+
+  # Samples traces probabilistically
+  # Requires a collector distribution with the 'probabilistic_sampler' processor
+  # Only applicable to trace pipelines
+  probabilistic_sampler:
+    hash_seed: 22 # Keep consistent to sample same traces across collectors
+    sampling_percentage: 30 # <-- **CUSTOMIZE THIS** (e.g., 100 for development, lower for prod)
+
 
 exporters:
   prometheusremotewrite:
-    endpoint: "http://prometheus:9090/api/v1/write"
-    timeout: 30s
+    endpoint: "http://prometheus:9090/api/v1/write" # <-- **CUSTOMIZE THIS**
 
-  logging:
+  # Useful for debugging - prints received data to the collector logs
+  debug:
     verbosity: detailed
+
+  # Exports traces (and potentially metrics/logs) to an OTLP endpoint
   otlp:
-    endpoint: "jaeger:4317"
+    endpoint: "jaeger:4317" # <-- **CUSTOMIZE THIS** (e.g., jaeger:4317, otel-collector-receiver:4317)
+    # If using default Jaeger all-in-one or some setups, insecure might be true,
+    # but use TLS in production if possible.
     tls:
-      insecure: true
+      insecure: true # <-- **REVIEW THIS FOR PRODUCTION**
+
 
 service:
+  # Configuration for the collector's own telemetry metrics
+  telemetry:
+    metrics:
+      level: detailed
+      address: 0.0.0.0:8888 # Default port to scrape collector metrics
+
   pipelines:
     traces:
-      receivers: [otlp]
-      processors: [batch, resource]  # Include resource processor here
-      exporters: [otlp, logging]
+      receivers: [otlp] # Receive traces via OTLP
+      processors: [resource, batch, probabilistic_sampler] # Apply processors in order
+      exporters: [otlp, debug] # Export traces to OTLP endpoint and debug output
+
     metrics:
+      receivers: [otlp, hostmetrics] # Receive metrics via OTLP and hostmetrics
+      processors: [batch, resource] # Apply processors (transform included as per your input rules)
+      exporters: [prometheusremotewrite, debug] # Export metrics to Prometheus and debug output
+
+    # You might add a logs pipeline here if collecting logs via OTLP
+    logs:
       receivers: [otlp]
       processors: [batch, resource]
-      exporters: [logging]
+      exporters: [debug]

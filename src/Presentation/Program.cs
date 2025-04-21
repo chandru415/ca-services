@@ -2,7 +2,6 @@ using Microsoft.AspNetCore.HttpOverrides;
 using Presentation.Endpoints;
 using Presentation.Installers.Extensions;
 using Scalar.AspNetCore;
-using System.Security.Claims;
 
 var builder = WebApplication.CreateBuilder(args);
 

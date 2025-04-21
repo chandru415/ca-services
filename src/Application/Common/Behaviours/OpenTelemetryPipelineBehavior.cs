@@ -1,12 +1,6 @@
 ﻿using MediatR;
-using Microsoft.Extensions.Logging;
-using System;
-using System.Collections.Generic;
 using System.Diagnostics;
 using System.Diagnostics.Metrics;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace Application.Common.Behaviours
 {
@@ -14,7 +8,7 @@ namespace Application.Common.Behaviours
     where TRequest : IRequest<TResponse>
     {
         private static readonly ActivitySource ActivitySource = new("MyApp.MediatR");
-        private static readonly Meter Meter = new("MyApp.MediatR.Metrics");
+        private static readonly Meter Meter = new("MyApp.Metrics");
 
         private static readonly Counter<long> RequestCounter = Meter.CreateCounter<long>(
             "mediatr.requests.count",

@@ -25,5 +25,17 @@ namespace Shared.Helpers
                 return "[Serialization Error]";
             }
         }
+
+        public static object SafeSerializeResponse<TResponse>(TResponse response)
+        {
+            try
+            {
+                return JsonSerializer.Serialize(response, options: GetOptions());
+            }
+            catch
+            {
+                return "[Serialization Error]";
+            }
+        }
     }
 }

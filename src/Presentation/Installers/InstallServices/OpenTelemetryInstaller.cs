@@ -4,6 +4,7 @@ using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
 using Presentation.Installers.Extensions;
+using OpenTelemetry.Exporter;
 
 namespace Presentation.Installers.InstallServices
 {
@@ -11,20 +12,29 @@ namespace Presentation.Installers.InstallServices
     {
         public void InstallServices(IServiceCollection services, IConfiguration configuration)
         {
-            // Get configuration values with proper fallbacks
-            var tracingOtlpEndpoint = configuration["OTLP_ENDPOINT_URL"] ?? "http://localhost:4317";
-            var environmentName = configuration["ASPNETCORE_ENVIRONMENT"] ?? "Development";
-            var serviceName = configuration["SERVICE_NAME"] ?? "UnknownService";
+            var otlpEndpoint = configuration["OTLP_ENDPOINT_URL"] ?? "http://localhost:4317";
+
+            services.AddLogging(logging =>
+            {
+                logging.ClearProviders();
+                logging.AddConsole();
+                logging.AddOpenTelemetry(options =>
+                {
+                    options.IncludeFormattedMessage = true;
+                    options.ParseStateValues = true;
+                    options.IncludeScopes = true;
+                });
+            });
 
             services.AddOpenTelemetry()
                 .ConfigureResource(resource => resource
                     .AddService(
-                        serviceName: serviceName,
+                        serviceName: configuration["SERVICE_NAME"] ?? "UnknownService",
                         serviceVersion: typeof(Program).Assembly.GetName().Version?.ToString() ?? "unknown",
                         serviceInstanceId: Environment.MachineName)
                     .AddAttributes(new Dictionary<string, object>
                     {
-                        ["environment"] = environmentName,
+                        ["environment"] = configuration["ASPNETCORE_ENVIRONMENT"] ?? "Development",
                         ["deployment.region"] = configuration["REGION"] ?? "local"
                     }))
                 .WithTracing(tracing =>
@@ -32,7 +42,7 @@ namespace Presentation.Installers.InstallServices
                     tracing
                         .AddAspNetCoreInstrumentation(options =>
                         {
-                            options.Filter = ctx => ctx.Request.Path != "/health"; // Exclude health checks
+                            options.Filter = ctx => ctx.Request.Path != "/health";
                             options.EnrichWithHttpRequest = (activity, request) =>
                             {
                                 activity.SetTag("http.client_ip", request.HttpContext.Connection.RemoteIpAddress);
@@ -41,9 +51,12 @@ namespace Presentation.Installers.InstallServices
                         .AddHttpClientInstrumentation()
                         .AddSqlClientInstrumentation()
                         .AddSource("MediatR")
-                        ;
+                        .AddSource("NATS.Client")
+                        .AddSource("MyApp.MediatR")
+                        .AddSource("Redis") // If you're using a Redis library with diagnostics
+                        .SetErrorStatusOnException();
 
-                    if (Uri.TryCreate(tracingOtlpEndpoint, UriKind.Absolute, out var otlpUri))
+                    if (Uri.TryCreate(otlpEndpoint, UriKind.Absolute, out var otlpUri))
                     {
                         tracing.AddOtlpExporter(otlpOptions =>
                         {
@@ -58,22 +71,40 @@ namespace Presentation.Installers.InstallServices
                             provider.GetRequiredService<ILogger<Program>>());
                     }
                 })
-                .WithMetrics(metrics => metrics
-                    .AddAspNetCoreInstrumentation()
-                    .AddHttpClientInstrumentation()
-                    .AddRuntimeInstrumentation()
-                    .AddProcessInstrumentation()
-                    .AddMeter("NATS.*")
-                    .AddMeter("MediatR.*")
-                    .AddMeter("Microsoft.AspNetCore.Hosting")
-                    .AddMeter("Microsoft.AspNetCore.Server.Kestrel")
-                    .AddMeter("System.Net.Http")
-                    .AddMeter("System.Net.NameResolution")
-                    .AddOtlpExporter(otlpOptions =>
+                .WithMetrics(metrics =>
+                {
+                    metrics
+                        .AddAspNetCoreInstrumentation()
+                        .AddHttpClientInstrumentation()
+                        .AddRuntimeInstrumentation()
+                        .AddProcessInstrumentation()
+                        .AddMeter("NATS.*")
+                        .AddMeter("MediatR.*")
+                        .AddMeter("Redis")
+                        .AddMeter("Microsoft.AspNetCore.Hosting")
+                        .AddMeter("Microsoft.AspNetCore.Server.Kestrel")
+                        .AddMeter("System.Net.Http")
+                        .AddMeter("System.Net.NameResolution")
+                        .AddMeter("MyApp.Metrics");
+
+                    if (Uri.TryCreate(otlpEndpoint, UriKind.Absolute, out var metricEndpoint))
                     {
-                        otlpOptions.Endpoint = new Uri(tracingOtlpEndpoint);
-                        otlpOptions.Protocol = OpenTelemetry.Exporter.OtlpExportProtocol.Grpc;
-                    }));
+                        metrics.AddOtlpExporter(options =>
+                        {
+                            options.Endpoint = metricEndpoint;
+                            options.Protocol = OtlpExportProtocol.Grpc;
+                        });
+                    }
+                })
+                .WithLogging(logging =>
+                {
+                    logging.AddOtlpExporter(options =>
+                    {
+                        options.Endpoint = new Uri(otlpEndpoint);
+                        options.Protocol = OtlpExportProtocol.Grpc;
+                    });
+                });
         }
+
     }
 }

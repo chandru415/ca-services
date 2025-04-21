@@ -47,6 +47,9 @@ namespace Application.Common.Behaviours
                     sw.Stop();
 
                     _logger.LogInformation("✅ Handled {Request} in {Elapsed}ms for user {username}", requestName, sw.ElapsedMilliseconds, username);
+
+                    activity?.SetTag("response.payload", Helper.SafeSerializeResponse(response));
+
                     activity?.SetStatus(ActivityStatusCode.Ok);
                     return response;
                 }
